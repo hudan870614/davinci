@@ -31,7 +31,7 @@ import {
   getDimetionAxisOption
 } from './util'
 
-export default function (chartProps: IChartProps) {
+export default function (chartProps: IChartProps, drillOptions) {
   const {
     width,
     height,
@@ -104,10 +104,13 @@ export default function (chartProps: IChartProps) {
     }
   }
 
+  const { selectedItems } = drillOptions
   const { secondaryMetrics } = chartProps
+
   const seriesData = secondaryMetrics
-    ? getAixsMetrics('metrics', metrics, data, stack, labelOption, yAxisLeft).concat(getAixsMetrics('secondaryMetrics', secondaryMetrics, data, stack, labelOption, yAxisRight))
-    : getAixsMetrics('metrics', metrics, data, stack, labelOption, yAxisLeft)
+    ? getAixsMetrics('metrics', metrics, data, stack, labelOption, selectedItems, {key: 'yAxisLeft', type: yAxisLeft})
+      .concat(getAixsMetrics('secondaryMetrics', secondaryMetrics, data, stack, labelOption, selectedItems, {key: 'yAxisRight', type: yAxisRight}))
+    : getAixsMetrics('metrics', metrics, data, stack, labelOption, selectedItems, {key: 'yAxisLeft', type: yAxisLeft})
 
   const seriesObj = {
     series: seriesData.map((series) => {
@@ -194,31 +197,34 @@ export default function (chartProps: IChartProps) {
   return option
 }
 
-export function getAixsMetrics (type, axisMetrics, data, stack, labelOption, axisPosition?: string) {
+export function getAixsMetrics (type, axisMetrics, data, stack, labelOption, selectedItems, axisPosition?: {key: string, type: string}) {
   const seriesNames = []
   const seriesAxis = []
   axisMetrics.forEach((m) => {
     const decodedMetricName = decodeMetricName(m.name)
     const localeMetricName = `[${getAggregatorLocale(m.agg)}] ${decodedMetricName}`
     seriesNames.push(decodedMetricName)
+    const stackOption = stack && axisPosition.type === 'bar' && axisMetrics.length > 1 ? { stack: axisPosition.key } : null
+    const itemData = data.map((g, index) => {
+      const itemStyle = selectedItems && selectedItems.length && selectedItems.some((item) => item === index) ? {itemStyle: {normal: {opacity: 1, borderWidth: 6}}} : null
+      return {
+        value: g[`${m.agg}(${decodedMetricName})`],
+        ...itemStyle
+      }
+    })
 
-    const itemData = data.map((obj, val) => obj[`${m.agg}(${decodedMetricName})`])
-
-    // const stackOption = (axis) => {
-    //   console.log('axis', axis)
-    //   if (stack && stack.length) {
-    //     return { stack: axis }
-    //   } else {
-    //     return null
-    //   }
-    // }
     seriesAxis.push({
       name: decodedMetricName,
-      type: axisPosition ? axisPosition : type === 'metrics' ? 'line' : 'bar',
+      type: axisPosition && axisPosition.type ? axisPosition.type : type === 'metrics' ? 'line' : 'bar',
+      ...stackOption,
       yAxisIndex: type === 'metrics' ? 1 : 0,
       data: itemData,
-      ...labelOption
-      // ...stackOption(`${type === 'metrics' ? 'left' : 'right'}`)
+      ...labelOption,
+      itemStyle: {
+        normal: {
+          opacity: selectedItems && selectedItems.length > 0 ? 0.25 : 1
+        }
+      }
     })
   })
   return seriesAxis
